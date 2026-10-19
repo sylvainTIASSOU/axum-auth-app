@@ -1,0 +1,15 @@
+server:
+  protocol: http
+  host: 127.0.0.1
+  port: 7150
+
+log:
+  level: trace # off, warn, trace, error, info, debug
+  format: pretty # json, pretty, compact, full
+  ## Crates to log i.e *name of your crate*, sqlx, axum, etc
+  crates:
+    - "auth"
+    - "axum"
+    - "sqlx"
+    - "tower"
+    - "tower-http"
