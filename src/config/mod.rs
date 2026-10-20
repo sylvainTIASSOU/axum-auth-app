@@ -1,4 +1,6 @@
 mod log;
+pub mod db;
+pub mod auth;
 
 ///Comprendre le système de configuration.
 ///
@@ -28,8 +30,14 @@ mod log;
 /// une autre variante pour les noms d'environnement personnalisés.
 
 use serde::Deserialize;
-use crate::config::log::Logger;
+
 use crate::Result;
+
+pub use self::{
+    auth::{AuthConfig, RsaJwtConfig},
+    db::{DatabaseConfig, RedisConfig},
+    log::Logger,
+};
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct ServerConfig {
@@ -52,6 +60,9 @@ impl ServerConfig {
 pub struct Config {
     server: ServerConfig,
     log: Logger,
+    database: DatabaseConfig,
+    redis: RedisConfig,
+    auth: AuthConfig,
 }
 
 impl Config {
@@ -88,6 +99,16 @@ impl Config {
 
     pub fn log(&self) -> &Logger {
         &self.log
+    }
+
+    pub fn redis(&self) -> &RedisConfig {
+        &self.redis
+    }
+    pub fn database(&self) -> &DatabaseConfig {
+        &self.database
+    }
+    pub fn auth(&self) -> &AuthConfig {
+        &self.auth
     }
 }
 

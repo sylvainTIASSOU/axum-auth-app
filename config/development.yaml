@@ -13,3 +13,26 @@ log:
     - "sqlx"
     - "tower"
     - "tower-http"
+
+database:
+  uri: postgresql://postgres:postgrespassword@localhost:5434/authdb
+  username: postgres
+  password: postgrespassword
+  host: localhost
+  port: 5434
+  database: authdb
+  ssl: false
+
+redis:
+  uri: redis://localhost:6377
+
+auth:
+  access:
+    # Path to the keys relative to Cargo.toml file.
+    private_key: config/security/keys/access_key.pem
+    public_key: config/security/keys/access_key_pub.pem
+    exp: 900 # Seconds 15 minutes
+  refresh:
+    private_key: config/security/keys/refresh_key.pem
+    public_key: config/security/keys/refresh_key_pub.pem
+    exp: 2419200 # Seconds 4 Weeks
