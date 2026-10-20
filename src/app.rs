@@ -1,10 +1,14 @@
-use std::io::IsTerminal;
+use std::{
+    sync::Arc,
+    io::IsTerminal
+};
 use axum::{Router, routing::get};
 use color_eyre::config::{HookBuilder, Theme};
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 
-use crate::{Result, config::Config, middlewares};
+use crate::{config::Config, controllers, middlewares, Result};
+use crate::context::AppContext;
 
 pub struct App;
 
@@ -18,9 +22,11 @@ impl App {
 
         let config = Config::load()?;
         config.log().setup()?;
+        let ctx = Arc::new(AppContext::try_from(&config).await?);
 
         let router = Router::new()
             .route("/hello", get(|| async {"Hello world"}))
+            .nest("/auth", controllers::auth::router(&ctx))
             .layer(
                 TraceLayer::new_for_http()
                     .make_span_with(middlewares::make_span_with)
