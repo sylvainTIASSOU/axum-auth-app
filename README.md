@@ -1,169 +1,140 @@
-# Axum Auth App
+# 🔐 Axum Auth App
 
-![Rust](https://img.shields.io/badge/Rust-2024-orange?logo=rust)
-![Axum](https://img.shields.io/badge/Axum-0.8-blue)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-336791?logo=postgresql&logoColor=white)
-![Redis](https://img.shields.io/badge/Redis-Docker-red?logo=redis&logoColor=white)
-![Status](https://img.shields.io/badge/status-en%20développement-yellow)
+![Rust](https://img.shields.io/badge/Rust-2024-000000?logo=rust&logoColor=white) ![Axum](https://img.shields.io/badge/Axum-0.8-315D81) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white) ![Redis](https://img.shields.io/badge/Redis-Cache-DC382D?logo=redis&logoColor=white) ![JWT](https://img.shields.io/badge/JWT-RS256-222222)
 
-> Base d'application backend en **Rust** reposant sur **Axum**, conçue pour évoluer vers un service d'authentification avec PostgreSQL, Redis et des tokens JWT. Le dépôt contient actuellement un serveur HTTP minimal, une infrastructure de configuration et des composants de contexte d'authentification.
+> API REST d'authentification développée en **Rust** avec **Axum**, **Tokio**, **SQLx**, **PostgreSQL**, **Redis**, **Argon2** et **JWT RS256**. Un projet pratique consacré à l'authentification, à la gestion de sessions et à la conception de services backend asynchrones.
 
-**Dépôt :** https://github.com/sylvainTIASSOU/axum-auth-app  
-**Auteur :** [sylvainTIASSOU](https://github.com/sylvainTIASSOU)
-
-> **État du projet :** le routeur vérifié expose `GET /hello`. Les dépendances et types relatifs à l'authentification ne constituent pas, à eux seuls, une implémentation complète des parcours d'inscription et de connexion. Le README distingue ce qui a été observé dans le code de ce qui reste à intégrer.
+**Auteur : [Sylvain TIASSOU](https://github.com/sylvainTIASSOU)** · [Dépôt GitHub](https://github.com/sylvainTIASSOU/axum-auth-app)
 
 ## Sommaire
 
 - [Présentation](#présentation)
+- [Fonctionnalités](#fonctionnalités)
 - [Stack technique](#stack-technique)
-- [Fonctionnalités et avancement](#fonctionnalités-et-avancement)
 - [Architecture](#architecture)
-- [Prérequis](#prérequis)
-- [Installation et démarrage](#installation-et-démarrage)
-- [API actuelle](#api-actuelle)
-- [Configuration et variables d'environnement](#configuration-et-variables-denvironnement)
-- [PostgreSQL, Redis et migrations](#postgresql-redis-et-migrations)
-- [Authentification JWT : conception](#authentification-jwt--conception)
-- [Tests et qualité du code](#tests-et-qualité-du-code)
-- [Sécurité et limites](#sécurité-et-limites)
+- [Installation et lancement](#installation-et-lancement)
+- [Référence API](#référence-api)
+- [Cycle d'authentification](#cycle-dauthentification)
+- [Sécurité](#sécurité)
+- [Tests et qualité](#tests-et-qualité)
 - [Compétences mises en pratique](#compétences-mises-en-pratique)
-- [Feuille de route](#feuille-de-route)
-- [Contribution](#contribution)
+- [Améliorations possibles](#améliorations-possibles)
 
 ## Présentation
 
-`axum-auth-app` explore la conception d'un backend Rust structuré : démarrage asynchrone du serveur, configuration d'application, instrumentation des requêtes et préparation des ressources d'authentification. L'architecture prévoit notamment des connexions à PostgreSQL et Redis, ainsi que des paires de clés pour l'encodage et le décodage de JWT.
+**Axum Auth App** est un service d'authentification HTTP conçu pour expérimenter les bonnes pratiques backend en Rust. Il utilise PostgreSQL pour conserver les utilisateurs et Redis pour conserver les informations des refresh tokens, avec des tokens d'accès JWT signés par clé RSA (RS256).
 
-**Objectifs techniques :**
+Le code actuellement publié expose l'inscription, la connexion, la consultation du compte courant et la déconnexion. Ce dépôt est un **projet de démonstration et d'apprentissage**, et n'est pas présenté ici comme un service audité ou prêt pour un déploiement de production sans durcissement supplémentaire.
 
-- Organiser une application Axum en modules réutilisables.
-- Séparer le démarrage HTTP, la configuration, les erreurs et le contexte d'application.
-- Préparer une architecture d'authentification basée sur des access tokens et refresh tokens.
-- Exploiter les outils asynchrones de l'écosystème Rust.
-- Faire tourner les services de données en environnement local avec Docker Compose.
+## Fonctionnalités
+
+- **Inscription** d'utilisateurs en base PostgreSQL.
+- **Hachage des mots de passe** via Argon2, avec sel aléatoire.
+- **Connexion** par email et mot de passe.
+- **Génération de deux JWT** (access et refresh) signés avec **RS256**.
+- **Enregistrement des refresh tokens** dans Redis, avec durée de vie (TTL).
+- **Protection de routes** avec des middlewares d'authentification (`AuthLayer` et `RefreshLayer`).
+- **Récupération du profil connecté** depuis PostgreSQL.
+- **Déconnexion** déclenchant la suppression d'une entrée de refresh token dans Redis.
+- **Traçage des requêtes** avec `tracing` et `tower-http`.
+- **Infrastructure locale Docker Compose** pour PostgreSQL et Redis.
+
+> **Périmètre vérifié :** aucune route autonome `/auth/refresh`, ni interface Swagger, n'a été identifiée dans le routeur actuel. Le nom `RefreshLayer` indique une logique de rafraîchissement au niveau middleware ; son comportement précis doit être confirmé avant de documenter un flux HTTP de renouvellement distinct.
 
 ## Stack technique
 
-Les versions ci-dessous proviennent du `Cargo.toml` observé sur la branche `main` le 20 octobre 2026.
-
-| Technologie | Version déclarée | Rôle |
+| Domaine | Outil | Rôle |
 | --- | --- | --- |
-| Rust | Édition 2024 | Langage et système de compilation |
-| Axum | 0.8.9 | Routeur et serveur HTTP |
-| Tokio | 1.54.0 | Runtime asynchrone |
-| Serde / serde_json | 1.x | Sérialisation et désérialisation |
-| SQLx | 0.9.0 | Accès asynchrone à PostgreSQL |
-| Redis | 1.7.1 | Client Redis asynchrone |
-| jsonwebtoken | 11.1.0 | Encodage et validation de JWT |
-| Argon2 | 0.6.0 | Bibliothèque de hachage de mots de passe |
-| Tower HTTP | 0.7.1 | Couches HTTP, CORS et tracing |
-| Tracing | 0.1.44 | Journalisation structurée |
-| config | 0.15.27 | Chargement des paramètres |
-| thiserror / color-eyre | 2.0.21 / 0.6.5 | Gestion et diagnostic des erreurs |
-| Docker Compose | — | Infrastructure PostgreSQL et Redis |
+| Langage | Rust, édition 2024 | Backend et sûreté des types |
+| HTTP | Axum 0.8 | Routeur et handlers |
+| Asynchrone | Tokio | Runtime async |
+| Données | PostgreSQL 17 | Stockage durable des utilisateurs |
+| Accès SQL | SQLx 0.9 | Pool, requêtes paramétrées, mapping des lignes |
+| Sessions | Redis | Stockage des refresh tokens et TTL |
+| Mot de passe | Argon2 | Hachage et vérification |
+| JWT | jsonwebtoken | Signatures RS256 et validation des claims |
+| Données HTTP | Serde / serde_json | Sérialisation et désérialisation JSON |
+| Observabilité | tracing, tracing-subscriber, tower-http | Journaux et traces des requêtes |
+| Configuration | config / YAML | Configuration applicative |
+| Erreurs | thiserror, color-eyre | Gestion et diagnostic des erreurs |
+| Environnement | Docker Compose | Services PostgreSQL et Redis locaux |
 
-**Remarque :** la présence d'une dépendance ne signifie pas que toutes ses fonctionnalités sont déjà exploitées par les routes publiques.
-
-## Fonctionnalités et avancement
-
-| Fonctionnalité | État observé |
-| --- | --- |
-| Initialisation du serveur HTTP Axum | Implémentée |
-| Route `GET /hello` | Implémentée |
-| Chargement de configuration et journalisation | Présents dans le démarrage |
-| Tracing des requêtes HTTP | Présent dans le routeur |
-| Types de contexte PostgreSQL, Redis et JWT | Définis dans `AppContext` |
-| Conteneurs PostgreSQL et Redis | Définis dans `compose.yaml` |
-| Endpoints register/login/logout | Non observés dans le routeur vérifié |
-| Protection de routes par JWT | Non observée dans le routeur vérifié |
-| Refresh token opérationnel | Non confirmé |
-| Documentation Swagger / OpenAPI | Non confirmée |
-| Tests d'intégration d'authentification | Non vérifiés |
+Versions issues du `Cargo.toml` du dépôt au 20 octobre 2026.
 
 ## Architecture
 
-Les fichiers suivants ont été consultés directement ou sont visibles à la racine du dépôt :
-
 ```text
 axum-auth-app/
-├── .idea/                 # Paramètres d'IDE présents dans le dépôt
-├── config/                # Dossier de configuration
-├── migrations/            # Dossier prévu pour les migrations SQL
-├── src/
-│   ├── bin/
-│   │   └── main.rs        # Point d'entrée du binaire
-│   ├── app.rs             # Construction et démarrage d'Axum
-│   ├── context.rs         # AppContext, AuthContext, JwtContext
-│   ├── lib.rs             # Déclarations et réexports des modules
-│   ├── config/            # Module déclaré par lib.rs (détail non audité)
-│   ├── error/             # Module déclaré par lib.rs (détail non audité)
-│   └── middlewares/       # Module déclaré par lib.rs (détail non audité)
-├── .env                   # Présent dans le dépôt : attention aux secrets !
-├── .gitignore
-├── Cargo.toml
+├── Cargo.toml               # Package, bibliothèque et binaire
 ├── Cargo.lock
-├── compose.yaml
-└── README.md
+├── compose.yaml             # PostgreSQL et Redis
+├── config/                  # Configuration de l'application
+├── migrations/              # Scripts de migration SQL
+└── src/
+    ├── bin/main.rs          # Point d'entrée du binaire `auth`
+    ├── lib.rs               # Exports des modules
+    ├── app.rs               # Démarrage HTTP et montage des routes
+    ├── context.rs           # AppContext, PostgreSQL, Redis, JWT
+    ├── config/              # Chargement de la configuration
+    ├── controllers/
+    │   └── auth.rs          # Register, login, current, logout
+    ├── middlewares/         # AuthLayer, RefreshLayer, tracing
+    ├── models/
+    │   ├── mod.rs
+    │   ├── users.rs          # DTO, modèle SQLx et Argon2
+    │   ├── token.rs          # Claims et détails des JWT
+    │   └── error.rs
+    └── error/                # Types d'erreurs applicatives
 ```
 
-> Certains sous-dossiers sont présentés comme modules car ils sont déclarés dans `src/lib.rs`. Leur contenu détaillé n'a pas pu être confirmé ; l'arborescence ne prétend pas être exhaustive.
+Les répertoires `config/`, `middlewares/` et `error/` sont présentés par responsabilité : leur contenu peut évoluer.
 
-### Parcours de démarrage
+### Répartition des responsabilités
 
-```text
-src/bin/main.rs
-    └── App::run()
-          ├── Charge la configuration
-          ├── Initialise la journalisation
-          ├── Construit le Router Axum
-          │     ├── GET /hello
-          │     └── TraceLayer
-          ├── Démarre TcpListener
-          └── Lance axum::serve(...)
-```
+1. `app.rs` initialise la configuration, le contexte partagé et le serveur Axum.
+2. `controllers/auth.rs` traite les requêtes HTTP et construit les réponses.
+3. `models/users.rs` gère les utilisateurs, les requêtes SQL paramétrées et la vérification des mots de passe.
+4. `context.rs` centralise le pool PostgreSQL, Redis et les clés JWT.
+5. Les middlewares contrôlent l'accès aux routes protégées et contribuent aux traces HTTP.
 
-`AppContext` regroupe une configuration, un pool SQLx PostgreSQL, une connexion Redis multiplexée et un contexte JWT (access/refresh). Il représente une base pour injecter les ressources partagées dans les handlers, mais **son utilisation dans le routeur actuel n'a pas été observée**.
+Le contexte applicatif est partagé via `Arc<AppContext>` ; l'initialisation utilisée par `App::run` est asynchrone (`AppContext::try_from(&config).await`).
 
-## Prérequis
+## Installation et lancement
 
-- [Rust et Cargo](https://rustup.rs/) avec une toolchain prenant en charge l'édition 2024.
-- [Docker](https://docs.docker.com/get-docker/) et [Docker Compose](https://docs.docker.com/compose/) pour PostgreSQL et Redis.
-- Un environnement local autorisant les ports définis dans la configuration de l'application.
-- Les paramètres et, si nécessaires, les clés RSA attendus par la configuration du projet.
+### Prérequis
 
-Vérifier les outils :
+- Rust stable avec Cargo, compatible avec **l'édition 2024**.
+- Docker et Docker Compose.
+- Une configuration applicative valide et les clés RSA attendues par le projet.
+- Facultatif : `sqlx-cli` si vous souhaitez appliquer les migrations avec la CLI SQLx.
 
-```bash
-rustc --version
-cargo --version
-docker --version
-docker compose version
-```
-
-## Installation et démarrage
-
-### 1. Cloner le dépôt
+### 1. Cloner le projet
 
 ```bash
 git clone https://github.com/sylvainTIASSOU/axum-auth-app.git
 cd axum-auth-app
 ```
 
-### 2. Préparer les paramètres
+### 2. Configurer l'environnement
 
-Examiner les fichiers de `config/`, le `.env` local et les types de configuration avant de lancer le serveur. Les noms exacts de **toutes** les clés de configuration attendues n'ont pas été vérifiés ; ne supposez pas que le modèle ci-dessous couvre toute la configuration du programme.
-
-Pour Docker Compose, les variables suivantes sont explicitement référencées :
+Le fichier `compose.yaml` attend ces variables :
 
 ```dotenv
-# Exemple local uniquement — choisir des valeurs privées
-POSTGRES_USER=app
-POSTGRES_PASSWORD=change-me-locally
+POSTGRES_USER=app_user
+POSTGRES_PASSWORD=replace-with-a-strong-password
 POSTGRES_DATABASE=auth_db
 ```
 
-Ne jamais publier un `.env` réel ni des clés privées dans Git.
+Créez localement un fichier `.env` contenant ces valeurs **d'exemple**. Configurez ensuite les paramètres de connexion, JWT et réseau à partir des fichiers du répertoire `config/`. Les noms exacts des clés de configuration doivent être vérifiés dans ce répertoire ; ils ne sont pas inventés ici.
+
+**Ports Docker locaux définis dans `compose.yaml` :**
+
+- PostgreSQL : `localhost:5434` (conteneur : `5432`).
+- Redis : `localhost:6377` (conteneur : `6379`).
+
+Ainsi, pour une exécution de l'API sur la machine hôte, les URL de connexion devront viser ces **ports publiés**, et non les ports internes des conteneurs.
+
+> **Sécurité :** le dépôt public contient un fichier `.env`. N'y stockez aucune valeur secrète réelle. En cas de publication passée d'identifiants ou de clés privées, faites une rotation et retirez-les également de l'historique Git si nécessaire.
 
 ### 3. Démarrer PostgreSQL et Redis
 
@@ -172,238 +143,234 @@ docker compose up -d
 docker compose ps
 ```
 
-Le fichier `compose.yaml` déclare :
+### 4. Appliquer les migrations
 
-| Service | Image | Port machine | Port conteneur |
-| --- | --- | --- | --- |
-| PostgreSQL | `postgres:17` | `5434` | `5432` |
-| Redis | `redis:latest` | `6377` | `6379` |
+Le dépôt comporte un répertoire `migrations/`. Si ses fichiers suivent les conventions SQLx, vous pouvez utiliser :
 
-La commande crée aussi des volumes nommés `pg_data` et `redis_data` pour conserver les données entre redémarrages.
+```bash
+cargo install sqlx-cli --no-default-features --features postgres
+# Configurer DATABASE_URL pour pointer vers la base locale
+sqlx migrate run
+```
 
-### 4. Compiler et lancer l'API
+Vérifiez les scripts et la configuration réelle avant la première exécution. Cette commande ne configure pas automatiquement les clés JWT.
+
+### 5. Construire et démarrer
 
 ```bash
 cargo check
 cargo run --bin auth
 ```
 
-Le binaire est nommé `auth` dans `Cargo.toml`. L'IP et le port d'écoute sont déterminés par le module de configuration (`config.server().address()`), **pas par une valeur fixée dans `main.rs`**.
+L'adresse du serveur est déterminée par `config.server().address()` ; elle n'est donc pas fixée arbitrairement dans cette documentation. Dans les exemples suivants, remplacez `http://localhost:8000` par l'adresse affichée au démarrage.
 
-### 5. Vérifier l'endpoint existant
+## Référence API
 
-En remplaçant l'adresse par celle affichée dans les logs :
+Les routes ci-dessous ont été vérifiées dans `src/app.rs` et `src/controllers/auth.rs`.
 
-```bash
-curl -i http://127.0.0.1:<PORT>/hello
-```
-
-**Réponse attendue :** `Hello world` (texte simple).
-
-> Le démarrage de l'application dépend de la configuration. Si celle-ci est absente ou incorrecte, il faut résoudre l'erreur affichée au lancement avant d'appeler l'API.
-
-### Arrêt de l'environnement local
-
-```bash
-docker compose down
-```
-
-Pour supprimer **également les volumes et toutes les données locales** (opération destructive) :
-
-```bash
-docker compose down -v
-```
-
-## API actuelle
-
-| Méthode | Chemin | Description | Authentification |
+| Méthode | Route | Accès | Description |
 | --- | --- | --- | --- |
-| `GET` | `/hello` | Message de test `Hello world` | Non |
+| `GET` | `/hello` | Public | Message de démonstration |
+| `POST` | `/auth/register` | Public | Enregistrement d'un utilisateur |
+| `POST` | `/auth/login` | Public | Vérification des identifiants et génération de tokens |
+| `GET` | `/auth/current` | Protégé | Retourne `name`, `pid`, `email` |
+| `POST` | `/auth/logout` | Protégé | Révocation d'un refresh token et réponse de déconnexion |
 
-### Exemple de requête
+Les routes `current` et `logout` utilisent `AuthLayer` et `RefreshLayer`. Selon la configuration de ces middlewares, le comportement peut dépendre des cookies et/ou d'un header d'autorisation.
 
-```http
-GET /hello HTTP/1.1
-Host: localhost:<PORT>
+### `POST /auth/register`
+
+**Corps JSON :**
+
+```json
+{
+  "name": "Ada Lovelace",
+  "email": "ada@example.com",
+  "password": "Example-Strong-Password-123!"
+}
 ```
 
-**À ne pas confondre avec une API d'authentification terminée :** aucune route `/register`, `/login`, `/refresh` ou `/me` n'est enregistrée dans le `Router` examiné.
+**Réponse attendue en cas de création :** `201 Created`
 
-## Configuration et variables d'environnement
+```json
+{"message":"User created succesfully"}
+```
 
-L'application charge la configuration via `Config::load()`, initialise la journalisation via `config.log().setup()` et résout l'adresse serveur via `config.server().address()`.
+L'orthographe de `succesfully` reflète actuellement la réponse codée dans le projet.
 
-Le fichier Compose lit :
-
-- `POSTGRES_USER`
-- `POSTGRES_PASSWORD`
-- `POSTGRES_DATABASE`
-
-Pour les secrets JWT, les paramètres de connexion et la configuration Redis, se référer aux modules du dossier `src/config/` et du dossier `config/` dans le dépôt. Cette documentation n'invente pas de noms de variables non confirmés.
-
-### Recommandations de configuration
-
-- Fournir un `.env.example` sans secret.
-- Exclure `.env`, fichiers PEM privés et autres secrets via `.gitignore`.
-- Séparer développement, test et production.
-- Valider les paramètres au démarrage et échouer avec un message explicite si un paramètre indispensable manque.
-- Privilégier les variables d'environnement ou un gestionnaire de secrets en production.
-
-## PostgreSQL, Redis et migrations
-
-### PostgreSQL
-
-`sqlx::PgPool` est le type de pool de connexions prévu dans `AppContext`. PostgreSQL est démarré dans le conteneur Docker sur le port local `5434`.
-
-La présence du dossier `migrations/` montre qu'une organisation des évolutions du schéma est prévue. Les fichiers de migration, leur contenu et leur exécution automatique n'ont pas été confirmés.
-
-Si les migrations sont compatibles avec **SQLx CLI**, un workflow *possible après vérification* serait :
+**Essai cURL :**
 
 ```bash
-cargo install sqlx-cli --no-default-features --features postgres
-# Vérifier DATABASE_URL et le contenu du dossier migrations/ avant exécution.
-# sqlx migrate run
+curl -i -X POST http://localhost:8000/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Ada Lovelace","email":"ada@example.com","password":"Example-Strong-Password-123!"}'
 ```
 
-### Redis
+### `POST /auth/login`
 
-Une `redis::aio::MultiplexedConnection` est prévue dans le contexte. Redis peut servir ultérieurement à conserver des sessions, des listes de révocation, des codes temporaires ou des mécanismes de limitation de débit — **ces usages sont des pistes d'évolution, pas des fonctions confirmées**.
+**Corps JSON :**
 
-## Authentification JWT : conception
-
-`src/context.rs` définit :
-
-- `AuthContext` avec les contextes `access` et `refresh`.
-- `JwtContext` avec une clé d'encodage, une clé de décodage et une durée d'expiration (`exp`).
-- Une construction des clés à partir d'une configuration `RsaJwtConfig`.
-
-Cela établit une **structure de préparation des JWT**. Cela ne démontre pas encore un cycle complet d'inscription, hachage, connexion, émission et renouvellement de tokens.
-
-### Parcours d'authentification envisagé
-
-```text
-POST /auth/register (à développer)
-    -> Validation -> Hachage Argon2 -> Insertion PostgreSQL
-POST /auth/login (à développer)
-    -> Vérification mot de passe -> Access + Refresh tokens
-GET /auth/me (à développer)
-    -> Vérification access token -> Utilisateur authentifié
-POST /auth/refresh (à développer)
-    -> Validation / rotation du refresh token
-POST /auth/logout (à développer)
-    -> Révocation ou invalidation côté serveur
+```json
+{
+  "email": "ada@example.com",
+  "password": "Example-Strong-Password-123!"
+}
 ```
 
-Ce diagramme est une **feuille de route**, et non la documentation d'endpoints existants.
+Lorsqu'une connexion réussit, le contrôleur renvoie un access token, le nom de l'utilisateur et une date de création, ainsi que des headers `Set-Cookie` pour `access_token` et `refresh_token`.
 
-## Tests et qualité du code
+```json
+{
+  "access_token": "<JWT_ACCESS_TOKEN>",
+  "name": "Ada Lovelace",
+  "created_at": "2026-10-20 12:00"
+}
+```
 
-Commandes utiles :
+La date est un exemple de format, pas une valeur réelle.
+
+```bash
+curl -i -c cookies.txt -X POST http://localhost:8000/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"ada@example.com","password":"Example-Strong-Password-123!"}'
+```
+
+### `GET /auth/current`
+
+Renvoie le profil de l'utilisateur identifié par le token :
+
+```json
+{
+  "name": "Ada Lovelace",
+  "pid": "00000000-0000-4000-8000-000000000000",
+  "email": "ada@example.com"
+}
+```
+
+La valeur UUID ci-dessus est fictive.
+
+```bash
+curl -i -b cookies.txt http://localhost:8000/auth/current
+```
+
+### `POST /auth/logout`
+
+Le handler demande la révocation du token associé à l'identifiant `token_id` et répond :
+
+```json
+{"message":"Logout success"}
+```
+
+```bash
+curl -i -b cookies.txt -X POST http://localhost:8000/auth/logout
+```
+
+> **Point à vérifier :** les cookies sont actuellement réémis avec une valeur vide, mais une durée de vie positive dans le handler `logout`. Pour une suppression fiable côté navigateur, définir `Max-Age=0` ou une date d'expiration passée.
+
+## Cycle d'authentification
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API as Axum
+    participant PG as PostgreSQL
+    participant R as Redis
+    Client->>API: POST /auth/register
+    API->>PG: Création utilisateur + hash Argon2
+    PG-->>API: Utilisateur créé
+    API-->>Client: 201 Created
+    Client->>API: POST /auth/login
+    API->>PG: Recherche par email
+    API->>API: Vérification Argon2
+    API->>API: Signature JWT access et refresh (RS256)
+    API->>R: Stockage refresh token avec TTL
+    API-->>Client: Access token + cookies
+    Client->>API: GET /auth/current
+    API->>PG: Recherche du compte par UUID
+    API-->>Client: Profil utilisateur
+    Client->>API: POST /auth/logout
+    API->>R: Révocation du refresh token
+    API-->>Client: Confirmation et cookies vidés
+```
+
+## Sécurité
+
+### Mécanismes présents dans le code
+
+- Argon2 pour calculer et vérifier les hachages des mots de passe.
+- Génération de JWT **RS256** avec identifiants UUID, `iat`, `nbf` et `exp`.
+- Clés de signature et de vérification distinctes pour la cryptographie asymétrique.
+- Refresh tokens suivis dans Redis, avec TTL et suppression explicite.
+- `HttpOnly` activé sur le cookie `refresh_token`, mais désactivé sur le cookie `access_token`.
+- `SameSite=Lax` pour les cookies créés dans le login.
+- Requêtes SQL avec paramètres liés (`.bind(...)`) plutôt que concaténation de chaînes.
+
+### Points à renforcer avant production
+
+1. **Secrets :** ne pas versionner `.env` ni les clés privées ; faire une rotation des secrets déjà exposés.
+2. **Cookies :** effacer les cookies avec `Max-Age=0` au logout ; activer `Secure` sous HTTPS ; réévaluer le choix de rendre le cookie d'accès lisible par JavaScript.
+3. **Protection CSRF/XSS :** définir une stratégie de sécurité cohérente avec le mode d'authentification choisi (cookies ou Bearer).
+4. **Révocation :** vérifier que le token révoqué est bien le refresh token associé à la session et que les middlewares valident son état Redis.
+5. **Attaques par force brute :** ajouter un rate limiting et une stratégie d'audit des connexions.
+6. **Entrées :** valider explicitement le format email, la taille des champs et la robustesse du mot de passe, avant insertion.
+7. **Expiration Redis :** vérifier que le TTL ne peut pas devenir négatif ou être converti en durée énorme.
+8. **Erreurs :** s'assurer que les réponses publiques n'exposent pas d'informations internes ou de détails SQL.
+9. **Code mort :** supprimer l'ancien `TryFrom<&Config>` bloquant de `AppContext`, devenu inutile au profit de l'initialisation asynchrone.
+10. **Vérifications automatisées :** effectuer des tests de sécurité et une revue de configuration avant toute mise en production.
+
+## Tests et qualité
 
 ```bash
 cargo fmt --all -- --check
 cargo check
-cargo clippy --all-targets --all-features -- -D warnings
+cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-Ces commandes constituent une procédure recommandée ; elles ne sont **pas présentées comme des tests déjà exécutés avec succès**.
-
-Avant une utilisation réelle de l'authentification, ajouter des tests sur :
-
-- L'inscription et les emails dupliqués.
-- La vérification du hachage de mot de passe.
-- L'expiration et la signature des JWT.
-- Le refus d'un token invalide.
-- La rotation et la révocation des refresh tokens.
-- L'accès aux routes protégées.
-- Les erreurs PostgreSQL et Redis.
-
-## Sécurité et limites
-
-### Points d'attention constatés
-
-1. **`.env` présent dans un dépôt public :** examiner immédiatement son contenu. S'il contient des secrets réels, les révoquer / faire tourner ; supprimer le suivi Git du fichier et envisager une purge de l'historique Git selon l'exposition.
-2. **Initialisation du contexte asynchrone :** `AppContext::try_from` utilise `tokio::runtime::Handle::current().block_on(...)`. Appeler cette conversion depuis un contexte asynchrone Tokio peut provoquer un panic. Préférer un constructeur `async fn AppContext::new(...) -> Result<_>`.
-3. **Authentification incomplète dans le routeur inspecté :** aucune protection ne doit être supposée avant de l'avoir réellement implémentée et testée.
-4. **Conteneurs de développement :** les ports de PostgreSQL et Redis sont exposés sur la machine hôte. Adapter le réseau et les accès avant toute mise en production.
-
-### Bonnes pratiques pour la suite
-
-- Hacher les mots de passe avec Argon2id et un sel aléatoire.
-- Vérifier explicitement les algorithmes JWT autorisés, l'émetteur, l'audience et l'expiration.
-- Éviter de journaliser les mots de passe, cookies et tokens.
-- Ajouter une limitation de débit sur les routes d'authentification.
-- Utiliser TLS/HTTPS en production et un cycle de vie explicite des clés.
-- Prévoir des tokens de refresh révocables et une rotation contrôlée.
-- Stocker la configuration sensible hors du dépôt.
+Ces commandes sont proposées pour vérifier le projet ; **leur réussite n'a pas été confirmée lors de cette analyse distante**. Les tests d'intégration devraient couvrir la création de comptes, les mots de passe incorrects, les JWT expirés, la révocation, les doublons d'emails et les erreurs PostgreSQL/Redis.
 
 ## Compétences mises en pratique
 
-Ce projet est particulièrement utile pour démontrer une progression en développement backend Rust. Les compétences ci-dessous sont reliées aux éléments **observés dans le dépôt**, et non à des fonctionnalités simplement envisagées.
+Ce projet permet de montrer concrètement les compétences suivantes dans un **portfolio Rust backend** :
 
-| Compétence | Éléments concrets du dépôt | Niveau de preuve |
-| --- | --- | --- |
-| **Rust : modularité et bibliothèque** | `src/lib.rs`, réexports, binaire séparé dans `src/bin/main.rs` | Démontrée |
-| **Programmation asynchrone** | `#[tokio::main]`, `App::run().await`, `TcpListener`, `axum::serve` | Démontrée |
-| **Création d'API HTTP avec Axum** | `Router::new()`, `.route("/hello", get(...))` | Démontrée |
-| **Middleware et observabilité** | `TraceLayer`, hooks de requête, réponse et échec | Démontrée |
-| **Configuration applicative** | `Config::load()`, paramétrage de logs et serveur | Démontrée |
-| **Gestion des erreurs Rust** | `Result`, `?`, `map_err(Into::into)` | Démontrée |
-| **Conception d'état partagé** | Structures `AppContext`, `AuthContext`, `JwtContext` avec `Clone` | Architecture préparée |
-| **Écosystème SQLx / PostgreSQL** | `PgPool` et service Docker PostgreSQL | Infrastructure préparée |
-| **Redis asynchrone** | `MultiplexedConnection` et conteneur Redis | Infrastructure préparée |
-| **JWT et cryptographie applicative** | `EncodingKey`, `DecodingKey`, contextes access/refresh | Types préparés, flux non démontré |
-| **Docker Compose** | Définition de services, ports et volumes | Démontrée |
+| Compétence | Réalisation observable |
+| --- | --- |
+| **Rust backend** | Structures, modules, `Result`, traitement d'erreurs, `Arc`, `Cow<'a, str>` |
+| **Axum & API REST** | Handlers asynchrones, `Router`, `State`, `Extension`, `Json`, middlewares |
+| **Tokio / async** | Initialisation des connexions, appels SQL et Redis asynchrones |
+| **PostgreSQL / SQLx** | Pool de connexions, `query_as`, `FromRow`, requêtes SQL paramétrées |
+| **Sécurité applicative** | Argon2, JWT RS256, cookies, contrôles d'accès et révocation |
+| **Redis** | Stockage de tokens, TTL et suppression de session |
+| **Architecture backend** | Séparation des contrôleurs, modèles, contexte, configuration et middlewares |
+| **Observabilité** | Tracing structuré des échanges HTTP |
+| **DevOps local** | Compose, bases de données en conteneurs et configuration d'environnement |
 
-### Ce que ce projet m'a permis de pratiquer
+**Présentation courte pour un CV ou LinkedIn :**
 
-- Structurer un backend Rust en composants testables et séparés.
-- Démarrer un serveur HTTP asynchrone avec Axum et Tokio.
-- Mettre en place la journalisation et le suivi du cycle de vie des requêtes.
-- Préparer un contexte applicatif partagé regroupant configuration et services externes.
-- Définir une infrastructure locale avec PostgreSQL, Redis et Docker Compose.
-- Aborder la conception d'un système de tokens JWT d'accès et de rafraîchissement.
+> Développement d'une API d'authentification en Rust/Axum intégrant inscription et connexion, mots de passe hachés avec Argon2, tokens JWT RS256, persistance PostgreSQL/SQLx et gestion des refresh tokens dans Redis. Conception de middlewares d'authentification, partage d'état asynchrone avec Tokio et traçage HTTP.
 
-> **Valorisation portfolio :** « Conception d'une base backend Rust/Axum modulaire, avec serveur asynchrone, instrumentation HTTP, configuration centralisée et infrastructure PostgreSQL/Redis. Préparation des composants nécessaires à une authentification JWT access/refresh. »
+## Améliorations possibles
 
-## Feuille de route
+Ces évolutions ne sont **pas présentées comme déjà implémentées** :
 
-- [x] Créer le projet Rust (édition 2024).
-- [x] Séparer la bibliothèque et le binaire.
-- [x] Configurer un serveur Axum minimal et le tracing HTTP.
-- [x] Définir les services PostgreSQL et Redis dans Docker Compose.
-- [x] Définir les contextes de clés JWT.
-- [ ] Corriger l'initialisation asynchrone de `AppContext`.
-- [ ] Retirer les secrets potentiels du dépôt et ajouter `.env.example`.
-- [ ] Connecter explicitement le contexte au routeur Axum.
-- [ ] Implémenter inscription et connexion avec mots de passe hachés.
-- [ ] Implémenter les extracteurs / middlewares d'authentification.
-- [ ] Implémenter access token, refresh token et révocation.
-- [ ] Finaliser et vérifier les migrations SQLx.
-- [ ] Ajouter les validations des payloads et les réponses d'erreur uniformes.
-- [ ] Documenter les endpoints avec OpenAPI / Swagger UI.
-- [ ] Ajouter des tests unitaires et d'intégration.
-- [ ] Mettre en place CI (fmt, clippy, tests et audit).
+- Endpoint dédié de renouvellement `/auth/refresh` si nécessaire.
+- Confirmation d'email, mot de passe oublié, déconnexion multi-appareils.
+- Swagger UI et spécification OpenAPI générée via Utoipa.
+- Validation d'entrée, limitation de débit, tests d'intégration complets.
+- CI GitHub Actions (format, lint, tests, audit de sécurité).
+- Documentation des schémas de migration et exemples de configuration nettoyés.
 
-## Contribution
+## Ressources
 
-Les retours, issues et pull requests sont les bienvenus : [ouvrir une issue](https://github.com/sylvainTIASSOU/axum-auth-app/issues).
-
-Avant une pull request :
-
-```bash
-cargo fmt --all
-cargo clippy --all-targets --all-features
-cargo test
-```
-
-## Licence
-
-Aucune licence n'a été vérifiée à la racine du dépôt lors de cette analyse. Vérifier / ajouter un fichier `LICENSE` avant de revendiquer une licence de redistribution.
+- [Documentation Axum](https://docs.rs/axum/latest/axum/)
+- [Documentation Tokio](https://tokio.rs/)
+- [Documentation SQLx](https://docs.rs/sqlx/latest/sqlx/)
+- [Documentation Argon2](https://docs.rs/argon2/latest/argon2/)
+- [Documentation Redis Rust](https://docs.rs/redis/latest/redis/)
+- [The Rust Programming Language](https://doc.rust-lang.org/book/)
 
 ---
 
-**Auteur :** [sylvainTIASSOU](https://github.com/sylvainTIASSOU)  
-**Projet :** [axum-auth-app](https://github.com/sylvainTIASSOU/axum-auth-app)  
-**Documentation fondée sur l'état public du dépôt consulté le 20 octobre 2026.**
+**Auteur : Sylvain TIASSOU** — [GitHub](https://github.com/sylvainTIASSOU)
+
+_Documentation établie à partir du code public consulté le 20 octobre 2026. Les exemples utilisent des identifiants fictifs et ne remplacent pas les tests fonctionnels sur une instance locale._
